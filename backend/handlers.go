@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// Input validation limits
+const (
+	maxListNameLength = 15
+	maxItemNameLength = 100
+	maxHexColorLength = 6
+)
+
 // List represents a shopping list
 type List struct {
 	ID        string    `json:"id"`
@@ -89,6 +96,10 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name is required", http.StatusBadRequest)
 		return
 	}
+	if len(input.Name) > maxItemNameLength {
+		http.Error(w, fmt.Sprintf("Item name must be %d characters or less", maxItemNameLength), http.StatusBadRequest)
+		return
+	}
 
 	// Get max sort_order for this list to append at the end
 	var maxOrder float64
@@ -115,11 +126,12 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(item)
 }
 
-// UpdateItem handles PATCH /api/items/{id} - updates an item
+// UpdateItem handles PATCH /api/lists/{listId}/items/{id} - updates an item
 func UpdateItem(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("listId")
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "Item ID is required", http.StatusBadRequest)
+	if listID == "" || id == "" {
+		http.Error(w, "List ID and Item ID are required", http.StatusBadRequest)
 		return
 	}
 
@@ -130,6 +142,12 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate name length if provided
+	if input.Name != nil && len(*input.Name) > maxItemNameLength {
+		http.Error(w, fmt.Sprintf("Item name must be %d characters or less", maxItemNameLength), http.StatusBadRequest)
 		return
 	}
 
@@ -163,9 +181,10 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 	for i := 1; i < len(updates); i++ {
 		query += ", " + updates[i]
 	}
-	query += fmt.Sprintf(" WHERE id = $%d", argNum)
+	// Verify item belongs to the specified list
+	query += fmt.Sprintf(" WHERE id = $%d AND list_id = $%d", argNum, argNum+1)
 	query += " RETURNING id, list_id, name, checked, sort_order, is_separator, created_at"
-	args = append(args, id)
+	args = append(args, id, listID)
 
 	var item Item
 	err := DB.QueryRow(context.Background(), query, args...).Scan(
@@ -181,16 +200,18 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(item)
 }
 
-// DeleteItem handles DELETE /api/items/{id} - deletes an item
+// DeleteItem handles DELETE /api/lists/{listId}/items/{id} - deletes an item
 func DeleteItem(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("listId")
 	id := r.PathValue("id")
-	if id == "" {
-		http.Error(w, "Item ID is required", http.StatusBadRequest)
+	if listID == "" || id == "" {
+		http.Error(w, "List ID and Item ID are required", http.StatusBadRequest)
 		return
 	}
 
+	// Verify item belongs to the specified list before deleting
 	result, err := DB.Exec(context.Background(),
-		"DELETE FROM items WHERE id = $1", id)
+		"DELETE FROM items WHERE id = $1 AND list_id = $2", id, listID)
 	if err != nil {
 		http.Error(w, "Failed to delete item", http.StatusInternalServerError)
 		return
@@ -273,10 +294,18 @@ func CreateList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name is required", http.StatusBadRequest)
 		return
 	}
+	if len(input.Name) > maxListNameLength {
+		http.Error(w, fmt.Sprintf("Name must be %d characters or less", maxListNameLength), http.StatusBadRequest)
+		return
+	}
 
 	// Default color if not provided
 	if input.HexColor == "" {
 		input.HexColor = "42b883"
+	}
+	if len(input.HexColor) > maxHexColorLength {
+		http.Error(w, "Invalid hex color", http.StatusBadRequest)
+		return
 	}
 
 	var list List
@@ -312,6 +341,16 @@ func UpdateList(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Validate input lengths
+	if input.Name != nil && len(*input.Name) > maxListNameLength {
+		http.Error(w, fmt.Sprintf("Name must be %d characters or less", maxListNameLength), http.StatusBadRequest)
+		return
+	}
+	if input.HexColor != nil && len(*input.HexColor) > maxHexColorLength {
+		http.Error(w, "Invalid hex color", http.StatusBadRequest)
 		return
 	}
 

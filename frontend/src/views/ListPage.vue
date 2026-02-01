@@ -99,7 +99,7 @@ async function addItem() {
 
 async function toggleItem(item) {
   try {
-    const response = await fetch(`${API_URL}/api/items/${item.id}`, {
+    const response = await fetch(`${API_URL}/api/lists/${props.id}/items/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ checked: !item.checked })
@@ -113,7 +113,7 @@ async function toggleItem(item) {
 
 async function deleteItem(item) {
   try {
-    const response = await fetch(`${API_URL}/api/items/${item.id}`, {
+    const response = await fetch(`${API_URL}/api/lists/${props.id}/items/${item.id}`, {
       method: 'DELETE'
     })
     if (!response.ok) throw new Error('Failed to delete item')
