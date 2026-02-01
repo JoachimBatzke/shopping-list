@@ -20,9 +20,16 @@ func main() {
 	// Create a new router (Go 1.22+ has built-in routing with path parameters)
 	mux := http.NewServeMux()
 
-	// Register our API routes
-	mux.HandleFunc("GET /api/items", GetItems)
-	mux.HandleFunc("POST /api/items", CreateItem)
+	// List routes
+	// mux.HandleFunc("GET /api/lists", GetLists) // Disabled for privacy - lists only accessible by ID
+	mux.HandleFunc("POST /api/lists", CreateList)
+	mux.HandleFunc("GET /api/lists/{id}", GetList)
+	mux.HandleFunc("PATCH /api/lists/{id}", UpdateList)
+	mux.HandleFunc("DELETE /api/lists/{id}", DeleteList)
+
+	// Item routes (nested under lists)
+	mux.HandleFunc("GET /api/lists/{listId}/items", GetItems)
+	mux.HandleFunc("POST /api/lists/{listId}/items", CreateItem)
 	mux.HandleFunc("PATCH /api/items/{id}", UpdateItem)
 	mux.HandleFunc("DELETE /api/items/{id}", DeleteItem)
 
@@ -48,9 +55,13 @@ func main() {
 // Without this, browsers block requests from different origins (ports count as different!)
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow requests from any origin (for development)
-		// In production, you'd restrict this to your Vercel domain
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// Get allowed origin from environment, default to * for development
+		allowedOrigin := os.Getenv("CORS_ORIGIN")
+		if allowedOrigin == "" {
+			allowedOrigin = "*"
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
