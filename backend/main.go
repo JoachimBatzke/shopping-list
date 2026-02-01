@@ -57,6 +57,10 @@ func main() {
 	mux.HandleFunc("GET /api/lists/{listId}/recommendations", GetRecommendations)
 	mux.HandleFunc("POST /api/lists/{listId}/recommendations/{name}/dismiss", DismissRecommendation)
 
+	// PWA routes (dynamic icons and manifest)
+	mux.HandleFunc("GET /api/lists/{listId}/icon/{size}", GetListIcon)
+	mux.HandleFunc("GET /api/lists/{listId}/manifest.webmanifest", GetListManifest)
+
 	// Health check endpoint (useful for deployment platforms)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Sortable from 'sortablejs'
@@ -308,6 +308,52 @@ async function dismissRecommendation(name) {
   }
 }
 
+// PWA: Update manifest and meta tags for this specific list
+function updatePWAForList(listData) {
+  if (!listData) return
+
+  // Update theme-color meta tag
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]')
+  if (themeColorMeta) {
+    themeColorMeta.setAttribute('content', `#${listData.hex_color}`)
+  }
+
+  // Update manifest link to point to dynamic manifest from backend
+  let manifestLink = document.querySelector('link[rel="manifest"]')
+  if (manifestLink) {
+    manifestLink.setAttribute('href', `${API_URL}/api/lists/${listData.id}/manifest.webmanifest`)
+  }
+
+  // Update apple-touch-icon to dynamic icon from backend
+  let appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]')
+  if (appleTouchIcon) {
+    appleTouchIcon.setAttribute('href', `${API_URL}/api/lists/${listData.id}/icon/180.png`)
+  }
+
+  // Update page title
+  document.title = `${listData.name} - JORLIST`
+}
+
+// PWA: Reset to defaults when leaving page
+function resetPWADefaults() {
+  const themeColorMeta = document.querySelector('meta[name="theme-color"]')
+  if (themeColorMeta) {
+    themeColorMeta.setAttribute('content', '#333333')
+  }
+
+  const manifestLink = document.querySelector('link[rel="manifest"]')
+  if (manifestLink) {
+    manifestLink.setAttribute('href', '/manifest.webmanifest')
+  }
+
+  const appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]')
+  if (appleTouchIcon) {
+    appleTouchIcon.setAttribute('href', '/apple-touch-icon.png')
+  }
+
+  document.title = 'JORLIST - Share a list with friends'
+}
+
 onMounted(async () => {
   // Listen for dark mode changes
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
@@ -318,6 +364,8 @@ onMounted(async () => {
   if (!notFound.value && list.value) {
     await fetchItems()
     await fetchRecommendations()
+    // Update PWA manifest and icons for this list
+    updatePWAForList(list.value)
   }
   // Set loading false first so the ul element is rendered
   loading.value = false
@@ -336,6 +384,11 @@ watch(items, async () => {
   await nextTick()
   initSortable()
 }, { deep: true })
+
+// Reset PWA defaults when leaving the page
+onUnmounted(() => {
+  resetPWADefaults()
+})
 </script>
 
 <template>
