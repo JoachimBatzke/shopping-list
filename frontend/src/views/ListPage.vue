@@ -330,6 +330,12 @@ function updatePWAForList(listData) {
     appleTouchIcon.setAttribute('href', `${API_URL}/api/lists/${listData.id}/icon/180.png`)
   }
 
+  // Update iOS app title (iOS uses this meta tag, not manifest short_name)
+  const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+  if (appleTitle) {
+    appleTitle.setAttribute('content', listData.name)
+  }
+
   // Update page title
   document.title = `${listData.name} - JORLIST`
 }
@@ -349,6 +355,11 @@ function resetPWADefaults() {
   const appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]')
   if (appleTouchIcon) {
     appleTouchIcon.setAttribute('href', '/apple-touch-icon.png')
+  }
+
+  const appleTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+  if (appleTitle) {
+    appleTitle.setAttribute('content', 'JORLIST')
   }
 
   document.title = 'JORLIST - Share a list with friends'

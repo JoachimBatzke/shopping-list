@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -104,32 +105,47 @@ func GetListManifest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the API base URL for icon paths
-	// In production, icons are served from the backend API
 	scheme := "https"
 	if r.TLS == nil && !strings.Contains(r.Host, "railway") {
 		scheme = "http"
 	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+	apiBaseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
 
-	// Build manifest
+	// Get frontend URL from Referer header or CORS_ORIGIN env var
+	// This is needed because start_url must be absolute for iOS
+	frontendURL := os.Getenv("CORS_ORIGIN")
+	if frontendURL == "" || frontendURL == "*" {
+		// Try to get from Referer header
+		if referer := r.Header.Get("Referer"); referer != "" {
+			if u, err := url.Parse(referer); err == nil {
+				frontendURL = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+			}
+		}
+	}
+	// Fallback to localhost for development
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173"
+	}
+
+	// Build manifest with absolute URLs for iOS compatibility
 	manifest := map[string]interface{}{
 		"name":             fmt.Sprintf("JORLIST - %s", list.Name),
 		"short_name":       list.Name,
 		"description":      "Share a list with friends",
-		"start_url":        fmt.Sprintf("/list/%s", listID),
-		"scope":            "/",
+		"start_url":        fmt.Sprintf("%s/list/%s", frontendURL, listID),
+		"scope":            fmt.Sprintf("%s/", frontendURL),
 		"display":          "standalone",
 		"theme_color":      fmt.Sprintf("#%s", list.HexColor),
 		"background_color": fmt.Sprintf("#%s", list.HexColor),
 		"icons": []map[string]string{
 			{
-				"src":     fmt.Sprintf("%s/api/lists/%s/icon/192.png", baseURL, listID),
+				"src":     fmt.Sprintf("%s/api/lists/%s/icon/192.png", apiBaseURL, listID),
 				"sizes":   "192x192",
 				"type":    "image/png",
 				"purpose": "any maskable",
 			},
 			{
-				"src":     fmt.Sprintf("%s/api/lists/%s/icon/512.png", baseURL, listID),
+				"src":     fmt.Sprintf("%s/api/lists/%s/icon/512.png", apiBaseURL, listID),
 				"sizes":   "512x512",
 				"type":    "image/png",
 				"purpose": "any maskable",
