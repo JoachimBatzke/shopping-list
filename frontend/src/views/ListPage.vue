@@ -318,11 +318,15 @@ function updatePWAForList(listData) {
     themeColorMeta.setAttribute('content', `#${listData.hex_color}`)
   }
 
-  // Update manifest link to point to dynamic manifest from backend
+  // Create or update manifest link to point to dynamic manifest from backend
+  // We create it dynamically so iOS Safari sees it fresh (not cached default)
   let manifestLink = document.querySelector('link[rel="manifest"]')
-  if (manifestLink) {
-    manifestLink.setAttribute('href', `${API_URL}/api/lists/${listData.id}/manifest.webmanifest`)
+  if (!manifestLink) {
+    manifestLink = document.createElement('link')
+    manifestLink.rel = 'manifest'
+    document.head.appendChild(manifestLink)
   }
+  manifestLink.href = `${API_URL}/api/lists/${listData.id}/manifest.webmanifest`
 
   // Update apple-touch-icon to dynamic icon from backend
   let appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]')
@@ -347,9 +351,10 @@ function resetPWADefaults() {
     themeColorMeta.setAttribute('content', '#333333')
   }
 
+  // Remove the manifest link when leaving list page
   const manifestLink = document.querySelector('link[rel="manifest"]')
   if (manifestLink) {
-    manifestLink.setAttribute('href', '/manifest.webmanifest')
+    manifestLink.remove()
   }
 
   const appleTouchIcon = document.querySelector('link[rel="apple-touch-icon"]')
