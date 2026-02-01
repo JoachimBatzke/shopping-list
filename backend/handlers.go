@@ -121,6 +121,9 @@ func CreateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Track item addition for recommendations (async, don't block response)
+	go TrackItemAddition(listID, input.Name)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(item)
@@ -198,6 +201,42 @@ func UpdateItem(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(item)
+}
+
+// ReorderItems handles PUT /api/lists/{listId}/items/reorder - reorders items
+func ReorderItems(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("listId")
+	if listID == "" {
+		http.Error(w, "List ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var input struct {
+		ItemIDs []string `json:"item_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if len(input.ItemIDs) == 0 {
+		http.Error(w, "item_ids is required", http.StatusBadRequest)
+		return
+	}
+
+	// Update sort_order for each item based on its position in the array
+	for i, itemID := range input.ItemIDs {
+		_, err := DB.Exec(context.Background(),
+			"UPDATE items SET sort_order = $1 WHERE id = $2 AND list_id = $3",
+			float64(i+1), itemID, listID)
+		if err != nil {
+			http.Error(w, "Failed to reorder items", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"success": true}`))
 }
 
 // DeleteItem handles DELETE /api/lists/{listId}/items/{id} - deletes an item
@@ -412,4 +451,122 @@ func DeleteList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ============ RECOMMENDATIONS HANDLERS ============
+
+// ItemHistory represents an item's addition history for recommendations
+type ItemHistory struct {
+	ID              string    `json:"id"`
+	ListID          string    `json:"list_id"`
+	ItemName        string    `json:"item_name"`
+	AddedCount      int       `json:"added_count"`
+	LastAddedAt     time.Time `json:"last_added_at"`
+	AvgDaysBetween  float64   `json:"avg_days_between"`
+	Dismissed       bool      `json:"dismissed"`
+}
+
+// Recommendation represents a suggested item
+type Recommendation struct {
+	Name    string  `json:"name"`
+	Urgency float64 `json:"urgency"`
+}
+
+// GetRecommendations returns item suggestions based on addition history
+func GetRecommendations(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("listId")
+	if listID == "" {
+		http.Error(w, "List ID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if item_history table exists by querying it
+	// If it doesn't exist, return empty array
+	rows, err := DB.Query(context.Background(),
+		`SELECT item_name,
+			CASE
+				WHEN avg_days_between > 0 THEN
+					EXTRACT(EPOCH FROM (NOW() - last_added_at)) / 86400 / avg_days_between
+				ELSE 0.5
+			END as urgency
+		FROM item_history
+		WHERE list_id = $1
+			AND dismissed = false
+			AND added_count >= 2
+			AND item_name NOT IN (SELECT name FROM items WHERE list_id = $1)
+		ORDER BY urgency DESC
+		LIMIT 10`, listID)
+	if err != nil {
+		// Table might not exist - return empty recommendations
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("[]"))
+		return
+	}
+	defer rows.Close()
+
+	var recs []Recommendation
+	for rows.Next() {
+		var rec Recommendation
+		if err := rows.Scan(&rec.Name, &rec.Urgency); err != nil {
+			continue
+		}
+		if rec.Urgency >= 0.5 { // Only suggest items with decent urgency
+			recs = append(recs, rec)
+		}
+	}
+
+	if recs == nil {
+		recs = []Recommendation{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(recs)
+}
+
+// DismissRecommendation dismisses a recommendation
+func DismissRecommendation(w http.ResponseWriter, r *http.Request) {
+	listID := r.PathValue("listId")
+	name := r.PathValue("name")
+	if listID == "" || name == "" {
+		http.Error(w, "List ID and item name are required", http.StatusBadRequest)
+		return
+	}
+
+	_, err := DB.Exec(context.Background(),
+		`UPDATE item_history SET dismissed = true
+		WHERE list_id = $1 AND item_name = $2`,
+		listID, name)
+	if err != nil {
+		http.Error(w, "Failed to dismiss recommendation", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"success": true}`))
+}
+
+// TrackItemAddition updates item history when an item is added
+func TrackItemAddition(listID, itemName string) {
+	// Try to update existing record
+	result, err := DB.Exec(context.Background(),
+		`UPDATE item_history
+		SET added_count = added_count + 1,
+			avg_days_between = CASE
+				WHEN added_count > 0 THEN
+					(avg_days_between * added_count + EXTRACT(EPOCH FROM (NOW() - last_added_at)) / 86400) / (added_count + 1)
+				ELSE 7
+			END,
+			last_added_at = NOW(),
+			dismissed = false
+		WHERE list_id = $1 AND item_name = $2`,
+		listID, itemName)
+
+	if err != nil || result.RowsAffected() == 0 {
+		// Insert new record
+		DB.Exec(context.Background(),
+			`INSERT INTO item_history (list_id, item_name, added_count, last_added_at, avg_days_between, dismissed)
+			VALUES ($1, $2, 1, NOW(), 7, false)
+			ON CONFLICT DO NOTHING`,
+			listID, itemName)
+	}
 }

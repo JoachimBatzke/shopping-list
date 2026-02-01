@@ -326,11 +326,10 @@ onUnmounted(() => {
 
 .phone-screen {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  width: calc(100% - 24px);
-  height: calc(100% - 24px);
-  border-radius: 16px;
+top: 36px;
+  left: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 80px);
   object-fit: cover;
   z-index: 1;
 }
@@ -384,11 +383,11 @@ onUnmounted(() => {
   justify-content: center;
   align-items: flex-start;
   padding: 2rem 1rem;
-  background: #f5f5f5;
+  background: var(--bg-body);
 }
 
 .wizard-container {
-  background: white;
+  background: var(--bg-item);
   border-radius: 16px;
   padding: 2rem;
   max-width: 400px;
@@ -608,10 +607,10 @@ onUnmounted(() => {
   }
 
   .phone-screen {
-    top: 10px;
-    left: 10px;
-    width: calc(100% - 20px);
-    height: calc(100% - 20px);
+  top: 30px;
+  left: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 68px);
   }
 
   .features {

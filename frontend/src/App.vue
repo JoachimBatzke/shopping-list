@@ -21,7 +21,7 @@
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  background: #f5f5f5;
+  background: var(--bg-body);
   min-height: 100vh;
 }
 

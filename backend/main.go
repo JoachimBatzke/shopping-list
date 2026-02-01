@@ -49,8 +49,13 @@ func main() {
 	// Item routes (nested under lists for security - verifies list ownership)
 	mux.HandleFunc("GET /api/lists/{listId}/items", GetItems)
 	mux.HandleFunc("POST /api/lists/{listId}/items", CreateItem)
+	mux.HandleFunc("PUT /api/lists/{listId}/items/reorder", ReorderItems)
 	mux.HandleFunc("PATCH /api/lists/{listId}/items/{id}", UpdateItem)
 	mux.HandleFunc("DELETE /api/lists/{listId}/items/{id}", DeleteItem)
+
+	// Recommendations routes
+	mux.HandleFunc("GET /api/lists/{listId}/recommendations", GetRecommendations)
+	mux.HandleFunc("POST /api/lists/{listId}/recommendations/{name}/dismiss", DismissRecommendation)
 
 	// Health check endpoint (useful for deployment platforms)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +86,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 
 		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		// Handle preflight requests (browsers send OPTIONS before actual request)
